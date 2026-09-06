@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[api/ai/quiz] error:", err);
     return NextResponse.json(
-      { error: "Failed to generate quiz. Please try again." },
+      { error: err instanceof Error ? err.message : "Failed to generate quiz. Please try again." },
       { status: 500 }
     );
   }

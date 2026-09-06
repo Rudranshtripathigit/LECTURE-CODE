@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[api/ai/summary] error:", err);
     return NextResponse.json(
-      { error: "Failed to generate lecture summary. Please try again." },
+      { error: err instanceof Error ? err.message : "Failed to generate lecture summary. Please try again." },
       { status: 500 }
     );
   }

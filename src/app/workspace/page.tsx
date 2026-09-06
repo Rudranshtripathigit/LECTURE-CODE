@@ -2,17 +2,19 @@
 
 import { useCallback, useState } from "react";
 import { useSession } from "next-auth/react";
-import { BookMarked, Code2, Swords, Loader2 } from "lucide-react";
+import { BookMarked, Code2, Swords, Timer, Loader2, TerminalSquare } from "lucide-react";
 import { ResizableSplitPane } from "@/components/workspace/ResizableSplitPane";
 import { VideoPlayer } from "@/components/workspace/VideoPlayer";
 import { CodeEditor } from "@/components/workspace/CodeEditor";
 import { LectureSummaryModal } from "@/components/workspace/LectureSummaryModal";
 import { CodeExampleModal } from "@/components/workspace/CodeExampleModal";
 import { QuizArena } from "@/components/workspace/QuizArena";
+import { FocusTimer } from "@/components/workspace/FocusTimer";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 
-type RightTab = "code" | "quiz";
+type RightTab = "code" | "quiz" | "focus";
 
 const DEFAULT_CODE: Record<string, string> = {
   cpp: `#include <iostream>
@@ -54,6 +56,11 @@ main();
 `,
 };
 
+interface RunResult {
+  compile: { stdout: string; stderr: string; code: number } | null;
+  run: { stdout: string; stderr: string; code: number; signal: string | null };
+}
+
 export default function WorkspacePage() {
   const { data: session } = useSession();
   const [videoId, setVideoId] = useState("rfscVS0vtbw");
@@ -64,8 +71,13 @@ export default function WorkspacePage() {
 
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isExampleOpen, setIsExampleOpen] = useState(false);
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+
+  const [isRunning, setIsRunning] = useState(false);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const handleVideoChange = useCallback((id: string) => {
     setVideoId(id);
@@ -74,11 +86,36 @@ export default function WorkspacePage() {
   const handleLanguageChange = useCallback((lang: string) => {
     setLanguage(lang);
     setCode(DEFAULT_CODE[lang] ?? "");
+    setRunResult(null);
+    setRunError(null);
   }, []);
+
+  async function handleRun() {
+    setIsRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    setAnalysisResult(null);
+    try {
+      const res = await fetch("/api/code/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to run code.");
+      setRunResult(data);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setIsRunning(false);
+    }
+  }
 
   async function handleAnalyze() {
     setIsAnalyzing(true);
     setAnalysisResult(null);
+    setRunResult(null);
+    setRunError(null);
     try {
       const res = await fetch("/api/ai/analyze", {
         method: "POST",
@@ -101,6 +138,17 @@ export default function WorkspacePage() {
       setIsAnalyzing(false);
     }
   }
+
+  const runOutput = runResult
+    ? [
+        runResult.compile?.stderr,
+        runResult.run.stdout,
+        runResult.run.stderr,
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .trim() || "(no output)"
+    : null;
 
   return (
     <div className="flex h-screen flex-col bg-bg-deep">
@@ -132,21 +180,36 @@ export default function WorkspacePage() {
               <div className="flex border-b border-white/5">
                 <button
                   onClick={() => setRightTab("code")}
-                  className={`flex-1 py-2.5 text-xs font-medium transition-colors focus-ring ${
+                  className={cn(
+                    "flex-1 py-2.5 text-xs font-medium transition-colors focus-ring",
                     rightTab === "code"
                       ? "border-b-2 border-accent-cyan text-accent-cyan"
                       : "text-slate-500 hover:text-slate-300"
-                  }`}
+                  )}
                 >
                   Compiler
                 </button>
                 <button
+                  onClick={() => setRightTab("focus")}
+                  className={cn(
+                    "flex-1 py-2.5 text-xs font-medium transition-colors focus-ring",
+                    rightTab === "focus"
+                      ? "border-b-2 border-accent-green text-accent-green"
+                      : "text-slate-500 hover:text-slate-300"
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Timer className="h-3 w-3" /> Focus Timer
+                  </span>
+                </button>
+                <button
                   onClick={() => setRightTab("quiz")}
-                  className={`flex-1 py-2.5 text-xs font-medium transition-colors focus-ring ${
+                  className={cn(
+                    "flex-1 py-2.5 text-xs font-medium transition-colors focus-ring",
                     rightTab === "quiz"
                       ? "border-b-2 border-accent-coral text-accent-coral"
                       : "text-slate-500 hover:text-slate-300"
-                  }`}
+                  )}
                 >
                   <span className="inline-flex items-center gap-1">
                     <Swords className="h-3 w-3" /> Quiz Arena
@@ -155,7 +218,7 @@ export default function WorkspacePage() {
               </div>
 
               <div className="flex-1 overflow-hidden">
-                {rightTab === "code" ? (
+                {rightTab === "code" && (
                   <div className="flex h-full flex-col">
                     <div className="flex-1 min-h-0">
                       <CodeEditor
@@ -164,11 +227,39 @@ export default function WorkspacePage() {
                         onCodeChange={setCode}
                         onLanguageChange={handleLanguageChange}
                         onAnalyze={handleAnalyze}
+                        onRun={handleRun}
                         isAnalyzing={isAnalyzing}
+                        isRunning={isRunning}
                       />
                     </div>
+
+                    {(isRunning || runOutput !== null || runError) && (
+                      <div className="max-h-48 overflow-y-auto border-t border-accent-cyan/20 bg-black/40 p-3">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-accent-cyan">
+                          <TerminalSquare className="h-3 w-3" /> Console
+                        </div>
+                        {isRunning ? (
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Compiling and running...
+                          </div>
+                        ) : runError ? (
+                          <pre className="whitespace-pre-wrap text-xs leading-relaxed text-accent-coral">
+                            {runError}
+                          </pre>
+                        ) : (
+                          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-200">
+                            {runOutput}
+                          </pre>
+                        )}
+                      </div>
+                    )}
+
                     {(isAnalyzing || analysisResult) && (
-                      <div className="max-h-48 overflow-y-auto border-t border-white/5 bg-bg-panel/80 p-3">
+                      <div className="max-h-48 overflow-y-auto border-t border-accent-violet/20 bg-bg-panel/80 p-3">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-accent-violet">
+                          <Code2 className="h-3 w-3" /> AI Analysis
+                        </div>
                         {isAnalyzing ? (
                           <div className="flex items-center gap-2 text-xs text-slate-400">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -182,9 +273,13 @@ export default function WorkspacePage() {
                       </div>
                     )}
                   </div>
-                ) : (
-                  <QuizArena videoTitle={videoTitle} />
                 )}
+
+                {rightTab === "focus" && (
+                  <FocusTimer videoId={videoId} videoTitle={videoTitle} />
+                )}
+
+                {rightTab === "quiz" && <QuizArena videoTitle={videoTitle} />}
               </div>
             </div>
           }

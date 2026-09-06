@@ -11,7 +11,9 @@ interface CodeEditorProps {
   onCodeChange: (value: string) => void;
   onLanguageChange: (language: string) => void;
   onAnalyze: () => void;
+  onRun: () => void;
   isAnalyzing?: boolean;
+  isRunning?: boolean;
 }
 
 const LANGUAGES = [
@@ -28,7 +30,9 @@ export function CodeEditor({
   onCodeChange,
   onLanguageChange,
   onAnalyze,
+  onRun,
   isAnalyzing,
+  isRunning,
 }: CodeEditorProps) {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -50,15 +54,16 @@ export function CodeEditor({
             </option>
           ))}
         </select>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={onAnalyze}
-          isLoading={isAnalyzing}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Analyze with AI
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="primary" onClick={onRun} isLoading={isRunning}>
+            <Play className="h-3.5 w-3.5" />
+            Run
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onAnalyze} isLoading={isAnalyzing}>
+            <Sparkles className="h-3.5 w-3.5" />
+            Analyze with AI
+          </Button>
+        </div>
       </div>
       <div className="flex-1">
         <Editor

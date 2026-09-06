@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[api/ai/analyze] error:", err);
     return NextResponse.json(
-      { error: "Failed to analyze code. Please try again." },
+      { error: err instanceof Error ? err.message : "Failed to analyze code. Please try again." },
       { status: 500 }
     );
   }

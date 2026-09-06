@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 // never touch them.
 // ----------------------------------------------------------------------
 
-const providers = [
+const providers: NextAuthOptions["providers"] = [
   CredentialsProvider({
     id: "credentials",
     name: "Email and Password",
@@ -54,7 +54,7 @@ if (process.env.GITHUB_ID && process.env.GITHUB_SECRET) {
     GitHubProvider({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
-    }) as (typeof providers)[number]
+    })
   );
 }
 
@@ -63,7 +63,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }) as (typeof providers)[number]
+    })
   );
 }
 

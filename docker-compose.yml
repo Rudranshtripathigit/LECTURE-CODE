@@ -1,0 +1,49 @@
+# ----------------------------------------------------------------------
+# Local dev infrastructure for LectureCode Pro.
+# Spins up Postgres + Redis, with a REST shim (serverless-redis-http)
+# in front of Redis so it speaks the same protocol as Upstash's REST
+# API — the app code needs zero changes to work against either.
+#
+# Usage:  docker compose up -d
+# Stop:   docker compose down          (add -v to also wipe data)
+# ----------------------------------------------------------------------
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lecturecode
+      POSTGRES_PASSWORD: lecturecode
+      POSTGRES_DB: lecturecode_pro
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lecturecode"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  redis-http:
+    # Upstash-REST-compatible proxy in front of the redis service above,
+    # so @upstash/redis / @upstash/ratelimit work unmodified locally.
+    image: hiett/serverless-redis-http:latest
+    restart: unless-stopped
+    ports:
+      - "8079:80"
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: local_dev_token
+      SRH_CONNECTION_STRING: "redis://redis:6379"
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
